@@ -63,10 +63,20 @@ class RegressionModel(object):
     A neural network model for approximating a function that maps from real
     numbers to real numbers. The network should be sufficiently large to be able
     to approximate sin(x) on the interval [-2pi, 2pi] to reasonable precision.
+
+    2-d transformation:
+    f(x) = reLU(x * w1 + b1) * w2 + b2
     """
     def __init__(self):
         # Initialize your model parameters here
-        "*** YOUR CODE HERE ***"
+        self.alpha = 0.04
+        self.hiddenLayerSize = 40
+        self.w1 = nn.Parameter(1, self.hiddenLayerSize)  # 1 x h
+        self.b1 = nn.Parameter(1, self.hiddenLayerSize)  # 1 x h
+        self.w2 = nn.Parameter(self.hiddenLayerSize, self.hiddenLayerSize)
+        self.b2 = nn.Parameter(1, self.hiddenLayerSize)
+        self.w3 = nn.Parameter(self.hiddenLayerSize, 1)
+        self.b3 = nn.Parameter(1, 1)
 
     def run(self, x):
         """
@@ -77,7 +87,14 @@ class RegressionModel(object):
         Returns:
             A node with shape (batch_size x 1) containing predicted y-values
         """
-        "*** YOUR CODE HERE ***"
+        prediction = nn.Linear(x, self.w1)
+        prediction = nn.AddBias(prediction, self.b1)
+        prediction = nn.ReLU(prediction)
+        prediction = nn.Linear(prediction, self.w2)
+        prediction = nn.AddBias(prediction, self.b2)
+        prediction = nn.ReLU(prediction)
+        prediction = nn.Linear(prediction, self.w3)
+        return nn.AddBias(prediction, self.b3)
 
     def get_loss(self, x, y):
         """
@@ -89,13 +106,33 @@ class RegressionModel(object):
                 to be used for training
         Returns: a loss node
         """
-        "*** YOUR CODE HERE ***"
+        predictedY = self.run(x)
+        return nn.SquareLoss(predictedY, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
-        "*** YOUR CODE HERE ***"
+        if dataset.processed == 195000:
+            return
+        size = len(dataset.x)
+        batch_size = int(size)
+        if size % 2 == 0:
+            self.alpha = 0.08
+            batch_size = int(size / 2)
+        for x, y in dataset.iterate_once(batch_size):
+            prediction = self.run(x)
+            if prediction != y:
+                loss = self.get_loss(x, y)
+                if nn.as_scalar(loss) > 0.02:
+                    lossGradient = nn.gradients(loss, [self.w1, self.b1, self.w2, self.b2, self.w3, self.b3])
+                    self.w1.update(lossGradient[0], -self.alpha)
+                    self.b1.update(lossGradient[1], -self.alpha)
+                    self.w2.update(lossGradient[2], -self.alpha)
+                    self.b2.update(lossGradient[3], -self.alpha)
+                    self.w3.update(lossGradient[4], -self.alpha)
+                    self.b3.update(lossGradient[5], -self.alpha)
+        self.train(dataset)
 
 class DigitClassificationModel(object):
     """

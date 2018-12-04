@@ -413,6 +413,7 @@ def check_regression(tracker):
     detected_parameters = None
     for batch_size in (1, 2, 4):
         inp_x = nn.Constant(dataset.x[:batch_size])
+        print(inp_x)
         inp_y = nn.Constant(dataset.y[:batch_size])
         output_node = model.run(inp_x)
         verify_node(output_node, 'node', (batch_size, 1), "RegressionModel.run()")
