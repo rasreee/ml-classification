@@ -134,7 +134,7 @@ class RegressionModel(object):
                     self.b3.update(lossGradient[5], -self.alpha)
         self.train(dataset)
 
-class DigitClassificationModel(object):
+class DigitClassificationModel(RegressionModel):
     """
     A model for handwritten digit classification using the MNIST dataset.
 
@@ -150,7 +150,14 @@ class DigitClassificationModel(object):
     """
     def __init__(self):
         # Initialize your model parameters here
-        "*** YOUR CODE HERE ***"
+        self.alpha = 0.20
+        self.hiddenLayerSize = 400
+        self.w1 = nn.Parameter(784, self.hiddenLayerSize)
+        self.b1 = nn.Parameter(1, self.hiddenLayerSize)
+        self.w2 = nn.Parameter(self.hiddenLayerSize, self.hiddenLayerSize)
+        self.b2 = nn.Parameter(1, self.hiddenLayerSize)
+        self.w3 = nn.Parameter(self.hiddenLayerSize, 10)  # 784 x 10
+        self.b3 = nn.Parameter(1, 10)
 
     def run(self, x):
         """
@@ -166,7 +173,14 @@ class DigitClassificationModel(object):
             A node with shape (batch_size x 10) containing predicted scores
                 (also called logits)
         """
-        "*** YOUR CODE HERE ***"
+        pred = nn.Linear(x, self.w1)
+        pred = nn.AddBias(pred, self.b1)
+        pred = nn.ReLU(pred)
+        pred = nn.Linear(pred, self.w2)
+        pred = nn.AddBias(pred, self.b2)
+        pred = nn.ReLU(pred)
+        pred = nn.Linear(pred, self.w3)
+        return nn.AddBias(pred, self.b3)
 
     def get_loss(self, x, y):
         """
@@ -181,13 +195,37 @@ class DigitClassificationModel(object):
             y: a node with shape (batch_size x 10)
         Returns: a loss node
         """
-        "*** YOUR CODE HERE ***"
+        pred = self.run(x)
+        return nn.SoftmaxLoss(pred, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
-        "*** YOUR CODE HERE ***"
+        batch_size = 4000
+        while dataset.get_validation_accuracy() < 0.97:
+            for x, y in dataset.iterate_once(batch_size):
+                loss = self.get_loss(x, y)
+                if nn.as_scalar(loss) > 0.02:
+                    lossGradient = nn.gradients(loss, [self.w1, self.b1, self.w2, self.b2, self.w3, self.b3])
+                    self.w1.update(lossGradient[0], -self.alpha)
+                    self.b1.update(lossGradient[1], -self.alpha)
+                    self.w2.update(lossGradient[2], -self.alpha)
+                    self.b2.update(lossGradient[3], -self.alpha)
+                    self.w3.update(lossGradient[4], -self.alpha)
+                    self.b3.update(lossGradient[5], -self.alpha)
+                if dataset.get_validation_accuracy() >= 0.97:
+                    return
+                elif dataset.get_validation_accuracy() > 0.95:
+                    self.alpha = 0.15
+                elif dataset.get_validation_accuracy() > 0.9:
+                    self.alpha = 0.175
+                elif dataset.get_validation_accuracy() >= 0.85:
+                    self.alpha = 0.175
+                elif dataset.get_validation_accuracy() >= 0.75:
+                    self.alpha = 0.175
+                else:
+                    self.alpha = 0.2
 
 class LanguageIDModel(object):
     """
@@ -205,8 +243,13 @@ class LanguageIDModel(object):
         self.num_chars = 47
         self.languages = ["English", "Spanish", "Finnish", "Dutch", "Polish"]
 
-        # Initialize your model parameters here
-        "*** YOUR CODE HERE ***"
+        # Initialize your
+        #  model parameters here
+        self.alpha = 0.07
+        self.hiddenLayerSize = 400
+        self.w = nn.Parameter(self.num_chars, len(self.languages))
+        self.w_hidden = nn.Parameter(len(self.languages), len(self.languages))
+        self.hidden = None
 
     def run(self, xs):
         """
@@ -237,7 +280,23 @@ class LanguageIDModel(object):
             A node with shape (batch_size x 5) containing predicted scores
                 (also called logits)
         """
-        "*** YOUR CODE HERE ***"
+        # print("H: ", self.hidden)
+        def f(h, x):
+            if h is None:
+                result = nn.Linear(x, self.w)
+                temp = nn.Constant(numpy.ones([x.data.shape[0], result.data.shape[0]]))
+                return nn.Linear(temp, result)
+            else:
+                return nn.Add(nn.Linear(x, self.w), nn.Linear(h, self.w_hidden))
+
+        for i in range(len(xs)):
+            # print("ITER: ", i)
+            # print(xs[i].data.shape)
+            self.hidden = f(self.hidden, xs[i])
+        result = nn.ReLU(self.hidden)
+        self.hidden = None
+        # print("RESULT: ", result)
+        return result
 
     def get_loss(self, xs, y):
         """
@@ -253,10 +312,27 @@ class LanguageIDModel(object):
             y: a node with shape (batch_size x 5)
         Returns: a loss node
         """
-        "*** YOUR CODE HERE ***"
+        pred = self.run(xs)
+        return nn.SoftmaxLoss(pred, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
-        "*** YOUR CODE HERE ***"
+        while dataset.get_validation_accuracy() < 0.81:
+            for xs, y in dataset.iterate_once(50):
+                score = dataset.get_validation_accuracy()
+                print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@SCORE: ", score)
+                print("EPOCH: ", dataset.epoch)
+                if dataset.epoch >= 10:
+                    return
+                if score >= 0.81:
+                    return
+                else:
+                    if score >= 0.63:
+                        return
+                    loss = self.get_loss(xs, y)
+                    if nn.as_scalar(loss) > 0:
+                        lossGradient = nn.gradients(self.get_loss(xs, y), [self.w, self.w_hidden])
+                        self.w.update(lossGradient[0], -self.alpha)
+                        self.w_hidden.update(lossGradient[1], -self.alpha)
